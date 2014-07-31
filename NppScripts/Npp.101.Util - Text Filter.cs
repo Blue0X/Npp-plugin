@@ -1,3 +1,4 @@
+﻿//css_inc EditorHelper.cs
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -8,8 +9,8 @@ using System.Linq;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
 using NppScripts;
+using NppScripts.EditorHelper;
 
 public class Script : NppScript {
 
@@ -32,6 +33,12 @@ public class Script : NppScript {
             base.Dispose(disposing);
         }
 
+        private void Form1_Deactivate(object sender, EventArgs e) {
+            if (!this.Visible) {
+                Close();
+            }
+        }
+
         public void setFocus() {
             this.textBox1.Focus();
         }
@@ -41,7 +48,8 @@ public class Script : NppScript {
             string strLine, path;
             int i = 0;
             lines = new StringCollection();
-            Win32.SendMessage(Npp.NppHandle, NppMsg.NPPM_GETFULLCURRENTPATH, 0, out path);
+            path = Npp.GetCurrentDocument();
+            if (!File.Exists(path)) return;
             FileStream aFile = new FileStream(path, FileMode.Open);
             StreamReader sr = new StreamReader(aFile);
             strLine = sr.ReadLine();
@@ -50,17 +58,20 @@ public class Script : NppScript {
                 i++;
                 this.lines.Add(strLine);
                 ListViewItem lvi = new ListViewItem();
+                lvi.UseItemStyleForSubItems  = false;
+                lvi.ForeColor = Color.Crimson;
                 lvi.Text = "" + i;
                 lvi.SubItems.Add(strLine);
                 this.listView1.Items.Add(lvi);
                 strLine = sr.ReadLine();
             }
             this.listView1.EndUpdate();
+            sr.Close();
+            aFile.Close();
         }
 
         private void textBox1_TextChanged(object sender, EventArgs e) {
-            string text = this.textBox1.Text.ToUpper();
-            text = text.Trim();
+            string text = this.textBox1.Text.ToUpper().Trim();
             this.listView1.BeginUpdate();
             this.listView1.Items.Clear();
             for (int i = 0; i < this.lines.Count; i++) {
@@ -72,6 +83,11 @@ public class Script : NppScript {
             }
 
             this.listView1.EndUpdate();
+            if (listView1.Items.Count == 1) {
+                this.listView1.Focus();
+                this.listView1.Items[0].Selected = true;
+                this.listView1.Items[0].Focused = true;
+            }
         }
 
         private void textBox1_KeyDown(object sender, KeyEventArgs e) {
@@ -102,10 +118,10 @@ public class Script : NppScript {
         }
 
         private void gotoFile() {
-            string linenumber;
+            int linenumber, moveline;
             if(this.listView1.SelectedItems.Count > 0) {
-                linenumber = this.listView1.SelectedItems[0].Text;
-                Win32.SendMessage(Npp.CurrentScintilla, SciMsg.SCI_GOTOLINE, int.Parse(linenumber) - 1, 0);
+                linenumber = int.Parse(listView1.SelectedItems[0].Text) - 1;
+                Editor.gotoLine(linenumber);
             }
         }
 
@@ -139,6 +155,7 @@ public class Script : NppScript {
             this.listView1.FullRowSelect = true;
             this.listView1.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Nonclickable;
             this.listView1.HideSelection = false;
+            this.listView1.MultiSelect = false;
             this.listView1.Location = new System.Drawing.Point(0, 20);
             this.listView1.Name = "listView1";
             this.listView1.Size = new System.Drawing.Size(624, 259);
@@ -168,6 +185,8 @@ public class Script : NppScript {
             this.Top = SystemInformation.WorkingArea.Height - 340;
             this.Left = SystemInformation.WorkingArea.Width - 640;
             this.StartPosition = FormStartPosition.Manual;
+            this.Font = new System.Drawing.Font("Courier New", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.Deactivate += new System.EventHandler(this.Form1_Deactivate);
             this.Controls.Add(this.listView1);
             this.Controls.Add(this.textBox1);
             this.TopMost = true;

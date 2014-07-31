@@ -1,4 +1,5 @@
-//npp_shortcut Alt+O
+﻿//npp_shortcut Alt+J
+//css_inc EditorHelper.cs
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -9,8 +10,8 @@ using System.Linq;
 using System.IO;
 using System.Text;
 using System.Windows.Forms;
-using System.Text.RegularExpressions;
 using NppScripts;
+using NppScripts.EditorHelper;
 
 public class Script : NppScript {
 
@@ -33,16 +34,23 @@ public class Script : NppScript {
             base.Dispose(disposing);
         }
 
+        private void Form1_Deactivate(object sender, EventArgs e)
+        {
+            if (!this.Visible) {
+                Close();
+            }
+        }
+
         public void setFocus() {
             this.textBox1.Focus();
         }
 
 
         private void LoadTags() {
-            string strLine, path;
+            string path = Npp.GetCurrentDocument();
+            int j = 0;
             lines = new StringCollection();
-            Win32.SendMessage(Npp.NppHandle, NppMsg.NPPM_GETFULLCURRENTPATH, 0, out path);
-            var procStart = new System.Diagnostics.ProcessStartInfo("ctags", "--fields=-aiklmnSzt+fsK --php-kinds=cidf --sort=yes --excmd=number -f - \"" + path + "\"");
+            var procStart = new System.Diagnostics.ProcessStartInfo("ctags", "--fields=-aiklmnSzt+fsK --php-kinds=cidf --excmd=number -f - \"" + path + "\"");
             procStart.CreateNoWindow = true;
             procStart.RedirectStandardOutput = true;
             procStart.UseShellExecute = false;
@@ -61,9 +69,16 @@ public class Script : NppScript {
                     lines.Add(str);
                     string[] arr = strs[i].Split('\t');
                     ListViewItem lvi = new ListViewItem();
+                    lvi.UseItemStyleForSubItems  = false;
                     lvi.Text = arr[0];
                     lvi.SubItems.Add(arr[3]);
                     lvi.SubItems.Add(arr[2].Replace(";\"", ""));
+                    lvi.SubItems[1].ForeColor = getColor(arr[3]);
+                    if (j++ % 2 == 1) {
+                        lvi.BackColor = Color.BlanchedAlmond;
+                        lvi.SubItems[1].BackColor = Color.BlanchedAlmond;
+                        lvi.SubItems[2].BackColor = Color.BlanchedAlmond;
+                    }
                     this.listView1.Items.Add(lvi);
                  }
             }
@@ -72,21 +87,43 @@ public class Script : NppScript {
         }
 
         private void textBox1_TextChanged(object sender, EventArgs e) {
-            string text = this.textBox1.Text.ToUpper();
-            text = text.Trim();
+            string text = this.textBox1.Text.ToUpper().Trim();
+            int j = 0;
             this.listView1.BeginUpdate();
             this.listView1.Items.Clear();
             for (int i = 0; i < lines.Count; i++) {
-                if (lines[i].ToUpper().IndexOf(text) == -1) continue;
                 string[] arr = lines[i].Split('\t');
+                if (arr[0].ToUpper().IndexOf(text) == -1) continue;
                 ListViewItem lvi = new ListViewItem();
+                lvi.UseItemStyleForSubItems  = false;
                 lvi.Text = arr[0];
                 lvi.SubItems.Add(arr[3]);
                 lvi.SubItems.Add(arr[2].Replace(";\"", ""));
+                lvi.SubItems[1].ForeColor = getColor(arr[3]);
+                if (j++ % 2 == 1) {
+                    lvi.BackColor = Color.BlanchedAlmond;
+                    lvi.SubItems[1].BackColor = Color.BlanchedAlmond;
+                    lvi.SubItems[2].BackColor = Color.BlanchedAlmond;
+                }
                 this.listView1.Items.Add(lvi);
             }
 
             this.listView1.EndUpdate();
+            if (listView1.Items.Count == 1) {
+                this.listView1.Focus();
+                this.listView1.Items[0].Selected = true;
+                this.listView1.Items[0].Focused = true;
+            }
+        }
+
+        private Color getColor(string type) {
+            if (type.Equals("method") || type.Equals("function")) {
+                return Color.Maroon;
+            }
+            else if (type.Equals("class")) {
+                return Color.Crimson;
+            }
+            return Color.LightSeaGreen;
         }
 
         private void textBox1_KeyDown(object sender, KeyEventArgs e) {
@@ -105,7 +142,7 @@ public class Script : NppScript {
                 this.textBox1.Focus();
             }
             else if (e.KeyChar == 13) {//Enter
-                this.gotoFile();
+                this.gotoLine();
                 Close();
             }
             else if (e.KeyChar == 27) {//Esc
@@ -114,14 +151,14 @@ public class Script : NppScript {
         }
 
         private void listView1_DoubleClick(object sender, EventArgs e) {
-            this.gotoFile();
+            this.gotoLine();
         }
 
-        private void gotoFile() {
-            string linenumber;
+        private void gotoLine() {
+            int linenumber;
             if(this.listView1.SelectedItems.Count > 0) {
-                linenumber = this.listView1.SelectedItems[0].SubItems[2].Text;
-                Win32.SendMessage(Npp.CurrentScintilla, SciMsg.SCI_GOTOLINE, int.Parse(linenumber) - 1, 0);
+                linenumber = int.Parse(listView1.SelectedItems[0].SubItems[2].Text) - 1;
+                Editor.gotoLine(linenumber);
             }
         }
 
@@ -155,6 +192,7 @@ public class Script : NppScript {
             this.listView1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.listView1.GridLines = true;
             this.listView1.FullRowSelect = true;
+            this.listView1.MultiSelect = false;
             this.listView1.HeaderStyle = System.Windows.Forms.ColumnHeaderStyle.Nonclickable;
             this.listView1.HideSelection = false;
             this.listView1.Location = new System.Drawing.Point(0, 20);
@@ -170,7 +208,7 @@ public class Script : NppScript {
             // columnHeader1
             //
             this.columnHeader1.Text = "Name";
-            this.columnHeader1.Width = 200;
+            this.columnHeader1.Width = 235;
             //
             // columnHeader2
             //
@@ -189,6 +227,8 @@ public class Script : NppScript {
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(400, 279);
             this.StartPosition = FormStartPosition.CenterScreen;
+            this.Font = new System.Drawing.Font("Courier New", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.Deactivate += new System.EventHandler(this.Form1_Deactivate);
             this.Controls.Add(this.listView1);
             this.Controls.Add(this.textBox1);
             this.TopMost = true;
